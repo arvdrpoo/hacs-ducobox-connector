@@ -47,8 +47,13 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    # Add main Ducobox sensors
+    # Add main Ducobox sensors (only if data exists)
     for description in SENSORS:
+        # Check if sensor data exists
+        if description.data_path is not None:
+            if safe_get(coordinator.data, *description.data_path) is None:
+                continue  # Skip sensor if data path doesn't exist
+
         unique_id = f"{device_id}-{description.key}"
         entities.append(
             DucoboxSensorEntity(
@@ -77,9 +82,14 @@ async def async_setup_entry(
             via_device=(DOMAIN, device_id),
         )
 
-        # Get the sensors for this node type
+        # Get the sensors for this node type (only if data exists)
         node_sensors = NODE_SENSORS.get(node_type, [])
         for description in node_sensors:
+            # Check if sensor data exists in this node
+            if description.data_path is not None:
+                if safe_get(node, *description.data_path) is None:
+                    continue  # Skip sensor if data path doesn't exist
+
             unique_id = f"{node_device_id}-{description.key}"
             entities.append(
                 DucoboxNodeSensorEntity(

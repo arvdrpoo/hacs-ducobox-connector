@@ -7,6 +7,13 @@ def safe_get(data, *keys):
             return None
     return data
 
+
+def extract_val(data):
+    """Extract 'Val' from a dict if present, otherwise return the data as-is."""
+    if isinstance(data, dict) and 'Val' in data:
+        return data['Val']
+    return data
+
 # Node-specific processing functions
 def process_node_temperature(value):
     """Process node temperature values."""

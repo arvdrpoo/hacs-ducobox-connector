@@ -65,11 +65,12 @@ class DucoboxCoordinator(DataUpdateCoordinator):
             data['info'] = duco_client.get_info()
             _LOGGER.debug(f"Data received from /info: {data}")
 
-            nodes_response = duco_client.get_nodes()
+            # Use raw_get to bypass Pydantic validation which may be too strict
+            nodes_response = duco_client.raw_get('/info/nodes')
             _LOGGER.debug(f"Data received from /info/nodes: {nodes_response}")
 
-            if nodes_response and hasattr(nodes_response, 'Nodes'):
-                data['nodes'] = [node.dict() for node in nodes_response.Nodes]
+            if nodes_response and 'Nodes' in nodes_response:
+                data['nodes'] = nodes_response['Nodes']
             else:
                 data['nodes'] = []
 
