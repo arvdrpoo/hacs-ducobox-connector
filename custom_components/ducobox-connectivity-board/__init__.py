@@ -6,7 +6,6 @@ from .const import DOMAIN
 from ducopy import DucoPy
 from .model.coordinator import DucoboxCoordinator
 
-# The Ducobox uses a self-signed certificate; suppress the per-request warning.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _LOGGER = logging.getLogger(__name__)
