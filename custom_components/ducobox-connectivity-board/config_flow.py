@@ -100,14 +100,11 @@ class DucoboxConnectivityBoardConfigFlow(config_entries.ConfigFlow, domain=DOMAI
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return DucoboxOptionsFlowHandler(config_entry)
+        return DucoboxOptionsFlowHandler()
 
 
 class DucoboxOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Ducobox Connectivity Board."""
-
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Manage options."""
