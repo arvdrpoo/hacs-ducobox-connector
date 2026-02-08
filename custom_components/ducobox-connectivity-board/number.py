@@ -8,6 +8,7 @@ structure {Val, Min, Max, Inc} becomes a NumberEntity.
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -88,6 +89,13 @@ async def async_setup_entry(
         ('Azure', 'Connection'),          # Enable — cloud connectivity toggle
     })
 
+    # Parameters stored in tenths of °C — display as °C with ÷10 scaling.
+    _temp_tenth_keys = frozenset({
+        ('HeatRecovery', 'Bypass', 'TempSupTgtZone1'),
+        ('Ventilation', 'Ctrl', 'TempDepThsLow'),
+        ('Ventilation', 'Ctrl', 'TempDepThsHigh'),
+    })
+
     # Individual keys to skip (module, submodule, key)
     _box_config_skip_keys = frozenset({
         ('General', 'Lan', 'Mode'),              # Network mode enum — not a tunable number
@@ -113,6 +121,9 @@ async def async_setup_entry(
                 # Skip individually excluded keys
                 if (module, submodule, key) in _box_config_skip_keys:
                     continue
+                is_temp_tenth = (module, submodule, key) in _temp_tenth_keys
+                scale = 10 if is_temp_tenth else 1
+
                 readable_name = f"{module} {submodule} {_humanize_config_key(key)}"
                 unique_id = f"{device_id}-config-{module}-{submodule}-{key}"
                 entities.append(
@@ -124,9 +135,11 @@ async def async_setup_entry(
                             device_info=device_info,
                             unique_id=unique_id,
                             name=readable_name,
-                            min_value=value['Min'],
-                            max_value=value['Max'],
-                            step=value['Inc'],
+                            min_value=value['Min'] / scale,
+                            max_value=value['Max'] / scale,
+                            step=value['Inc'] / scale,
+                            scale=scale,
+                            unit=UnitOfTemperature.CELSIUS if is_temp_tenth else None,
                         )
                     )
 
@@ -212,17 +225,19 @@ class DucoboxBoxNumberEntity(CoordinatorEntity, NumberEntity):
     poll cycle.
     """
 
-    def __init__(self, coordinator, module, submodule, param_key, device_info, unique_id, name, min_value, max_value, step):
+    def __init__(self, coordinator, module, submodule, param_key, device_info, unique_id, name, min_value, max_value, step, scale=1, unit=None):
         super().__init__(coordinator)
         self._module = module
         self._submodule = submodule
         self._param_key = param_key
         self._device_info = device_info
+        self._scale = scale
         self._attr_unique_id = unique_id
         self._attr_name = f"{device_info['name']} {name}"
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
+        self._attr_native_unit_of_measurement = unit
         self._attr_mode = NumberMode.AUTO
 
     @property
@@ -232,16 +247,23 @@ class DucoboxBoxNumberEntity(CoordinatorEntity, NumberEntity):
     @property
     def native_value(self):
         """Read current value from the coordinator data (polled every cycle)."""
-        return safe_get(
+        raw = safe_get(
             self.coordinator.data, 'config',
             self._module, self._submodule, self._param_key, 'Val'
         )
+        if raw is not None and self._scale != 1:
+            return raw / self._scale
+        return raw
 
     async def async_set_native_value(self, value: float):
-        # Determine if value should be int or float based on step
-        if self._attr_native_step and self._attr_native_step == int(self._attr_native_step):
-            value = int(round(value))
+        # Convert display value back to raw API value
+        raw = value * self._scale if self._scale != 1 else value
+        # The API always expects integers for these parameters;
+        # check against the *original* API step (step × scale).
+        api_step = self._attr_native_step * self._scale
+        if api_step and api_step == int(api_step):
+            raw = int(round(raw))
         await self.coordinator.async_set_box_config(
-            self._module, self._submodule, self._param_key, value
+            self._module, self._submodule, self._param_key, raw
         )
         await self.coordinator.async_request_refresh()

@@ -535,7 +535,10 @@ def api_config_response() -> dict:
             },
         },
         'HeatRecovery': {
-            'Bypass': {'TimeFilter': {'Val': 180, 'Min': 90, 'Inc': 90, 'Max': 360}},
+            'Bypass': {
+                'TempSupTgtZone1': {'Val': 210, 'Min': 100, 'Inc': 1, 'Max': 255},
+                'TimeFilter': {'Val': 180, 'Min': 90, 'Inc': 90, 'Max': 360},
+            },
         },
         'NightBoost': {
             'General': {

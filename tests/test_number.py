@@ -164,6 +164,88 @@ class TestNumberSetupEntry:
         assert any('TimeFilter' in uid for uid in box_ids)
         assert any('TempStart' in uid for uid in box_ids)
         assert any('SpeedWindMax' in uid for uid in box_ids)
+        assert any('TempSupTgtZone1' in uid for uid in box_ids)
+
+
+class TestTemperatureScaling:
+    """Temperature parameters stored in tenths should display as °C."""
+
+    @pytest.mark.asyncio
+    async def test_temp_entity_has_celsius_unit(self, mock_hass, mock_entry, mock_coordinator):
+        hass, _ = mock_hass
+        added_entities = []
+
+        await async_setup_entry(hass, mock_entry, lambda e: added_entities.extend(e))
+
+        temp_entity = next(
+            e for e in added_entities
+            if isinstance(e, DucoboxBoxNumberEntity) and 'TempSupTgtZone1' in e._attr_unique_id
+        )
+        assert temp_entity._attr_native_unit_of_measurement == '°C'
+
+    @pytest.mark.asyncio
+    async def test_temp_entity_range_scaled(self, mock_hass, mock_entry, mock_coordinator):
+        """Min/Max/Step should be divided by 10 for tenths-of-degree params."""
+        hass, _ = mock_hass
+        added_entities = []
+
+        await async_setup_entry(hass, mock_entry, lambda e: added_entities.extend(e))
+
+        temp_entity = next(
+            e for e in added_entities
+            if isinstance(e, DucoboxBoxNumberEntity) and 'TempSupTgtZone1' in e._attr_unique_id
+        )
+        assert temp_entity._attr_native_min_value == 10.0
+        assert temp_entity._attr_native_max_value == 25.5
+        assert temp_entity._attr_native_step == 0.1
+
+    @pytest.mark.asyncio
+    async def test_temp_entity_native_value_scaled(self, mock_hass, mock_entry, mock_coordinator):
+        """native_value should be raw API value ÷ 10."""
+        hass, _ = mock_hass
+        added_entities = []
+
+        await async_setup_entry(hass, mock_entry, lambda e: added_entities.extend(e))
+
+        temp_entity = next(
+            e for e in added_entities
+            if isinstance(e, DucoboxBoxNumberEntity) and 'TempSupTgtZone1' in e._attr_unique_id
+        )
+        # Raw API value is 210, should display as 21.0
+        assert temp_entity.native_value == 21.0
+
+    @pytest.mark.asyncio
+    async def test_temp_entity_set_value_scales_back(self, mock_hass, mock_entry, mock_coordinator):
+        """Setting 21.5°C should send 215 to the API."""
+        hass, _ = mock_hass
+        added_entities = []
+
+        await async_setup_entry(hass, mock_entry, lambda e: added_entities.extend(e))
+
+        temp_entity = next(
+            e for e in added_entities
+            if isinstance(e, DucoboxBoxNumberEntity) and 'TempSupTgtZone1' in e._attr_unique_id
+        )
+        await temp_entity.async_set_native_value(21.5)
+        mock_coordinator.async_set_box_config.assert_called_with(
+            'HeatRecovery', 'Bypass', 'TempSupTgtZone1', 215
+        )
+
+    @pytest.mark.asyncio
+    async def test_non_temp_entity_has_no_unit(self, mock_hass, mock_entry, mock_coordinator):
+        """Non-temperature entities should have no unit."""
+        hass, _ = mock_hass
+        added_entities = []
+
+        await async_setup_entry(hass, mock_entry, lambda e: added_entities.extend(e))
+
+        filter_entity = next(
+            e for e in added_entities
+            if isinstance(e, DucoboxBoxNumberEntity) and 'TimeFilter' in e._attr_unique_id
+        )
+        assert filter_entity._attr_native_unit_of_measurement is None
+        # Non-scaled: raw value should pass through directly
+        assert filter_entity.native_value == 180
 
 
 class TestNodeNumberEntity:

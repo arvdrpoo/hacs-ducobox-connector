@@ -1,9 +1,13 @@
 import logging
+import urllib3
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from .const import DOMAIN
 from ducopy import DucoPy
 from .model.coordinator import DucoboxCoordinator
+
+# The Ducobox uses a self-signed certificate; suppress the per-request warning.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _LOGGER = logging.getLogger(__name__)
 _PLATFORMS = ['sensor', 'number', 'select', 'button']
