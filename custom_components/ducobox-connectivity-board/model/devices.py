@@ -307,6 +307,50 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         value_fn=lambda data: safe_get(data, 'info', 'NightBoost', 'General', 'FlowLvlReqZone1', 'Val'),
         data_path=('info', 'NightBoost', 'General', 'FlowLvlReqZone1'),
     ),
+    DucoboxSensorEntityDescription(
+        key="NightBoostTempOutsideAvgThs",
+        name="NightBoost Outside Temperature Threshold",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'NightBoost', 'General', 'TempOutsideAvgThs', 'Val')
+        ),
+        data_path=('info', 'NightBoost', 'General', 'TempOutsideAvgThs'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="NightBoostTempOutside",
+        name="NightBoost Outside Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'NightBoost', 'General', 'TempOutside', 'Val')
+        ),
+        data_path=('info', 'NightBoost', 'General', 'TempOutside'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="NightBoostTempComfort",
+        name="NightBoost Comfort Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'NightBoost', 'General', 'TempComfort', 'Val')
+        ),
+        data_path=('info', 'NightBoost', 'General', 'TempComfort'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="NightBoostTempZone1",
+        name="NightBoost Zone 1 Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'NightBoost', 'General', 'TempZone1', 'Val')
+        ),
+        data_path=('info', 'NightBoost', 'General', 'TempZone1'),
+    ),
 
     # -- VentCool --
     DucoboxSensorEntityDescription(
@@ -326,6 +370,148 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
             safe_get(data, 'info', 'VentCool', 'General', 'TempInside', 'Val')
         ),
         data_path=('info', 'VentCool', 'General', 'TempInside'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="VentCoolTempOutsideAvgThs",
+        name="VentCool Outside Temperature Threshold",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'VentCool', 'General', 'TempOutsideAvgThs', 'Val')
+        ),
+        data_path=('info', 'VentCool', 'General', 'TempOutsideAvgThs'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="VentCoolTempOutsideAvg",
+        name="VentCool Outside Temperature Average",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'VentCool', 'General', 'TempOutsideAvg', 'Val')
+        ),
+        data_path=('info', 'VentCool', 'General', 'TempOutsideAvg'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="VentCoolTempInsideMin",
+        name="VentCool Minimum Inside Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'VentCool', 'General', 'TempInsideMin', 'Val')
+        ),
+        data_path=('info', 'VentCool', 'General', 'TempInsideMin'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="VentCoolTempInsideMax",
+        name="VentCool Maximum Inside Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'VentCool', 'General', 'TempInsideMax', 'Val')
+        ),
+        data_path=('info', 'VentCool', 'General', 'TempInsideMax'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="VentCoolTempComfort",
+        name="VentCool Comfort Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'VentCool', 'General', 'TempComfort', 'Val')
+        ),
+        data_path=('info', 'VentCool', 'General', 'TempComfort'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="VentCoolTempOutside",
+        name="VentCool Outside Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'VentCool', 'General', 'TempOutside', 'Val')
+        ),
+        data_path=('info', 'VentCool', 'General', 'TempOutside'),
+    ),
+
+    # -- Fan PWM levels (raw 16-bit values) --
+    DucoboxSensorEntityDescription(
+        key="PwmLvlSup",
+        name="Supply Fan PWM Level",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'Ventilation', 'Fan', 'PwmLvlSup', 'Val'),
+        data_path=('info', 'Ventilation', 'Fan', 'PwmLvlSup'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="PwmLvlEha",
+        name="Exhaust Fan PWM Level",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'Ventilation', 'Fan', 'PwmLvlEha', 'Val'),
+        data_path=('info', 'Ventilation', 'Fan', 'PwmLvlEha'),
+    ),
+
+    # -- Ventilation calibration --
+    DucoboxSensorEntityDescription(
+        key="CalibrationState",
+        name="Calibration State",
+        state_class=None,
+        value_fn=lambda data: safe_get(data, 'info', 'Ventilation', 'Calibration', 'State', 'Val'),
+        data_path=('info', 'Ventilation', 'Calibration', 'State'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="CalibrationStatus",
+        name="Calibration Status",
+        state_class=None,
+        value_fn=lambda data: safe_get(data, 'info', 'Ventilation', 'Calibration', 'Status', 'Val'),
+        data_path=('info', 'Ventilation', 'Calibration', 'Status'),
+    ),
+
+    # -- General info sensors --
+    DucoboxSensorEntityDescription(
+        key="LanMode",
+        name="Network Mode",
+        state_class=None,
+        icon="mdi:network",
+        value_fn=lambda data: safe_get(data, 'info', 'General', 'Lan', 'Mode', 'Val'),
+        data_path=('info', 'General', 'Lan', 'Mode'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="LanIp",
+        name="IP Address",
+        state_class=None,
+        icon="mdi:ip-network",
+        value_fn=lambda data: safe_get(data, 'info', 'General', 'Lan', 'Ip', 'Val'),
+        data_path=('info', 'General', 'Lan', 'Ip'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="NetworkDucoState",
+        name="Duco Network State",
+        state_class=None,
+        icon="mdi:network",
+        value_fn=lambda data: safe_get(data, 'info', 'General', 'NetworkDuco', 'State', 'Val'),
+        data_path=('info', 'General', 'NetworkDuco', 'State'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="PublicApiWriteReqCntRemain",
+        name="API Write Requests Remaining",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:api",
+        value_fn=lambda data: safe_get(data, 'info', 'General', 'PublicApi', 'WriteReqCntRemain', 'Val'),
+        data_path=('info', 'General', 'PublicApi', 'WriteReqCntRemain'),
+    ),
+
+    # -- Frost protection: heater present --
+    DucoboxSensorEntityDescription(
+        key="HeaterOdaPresent",
+        name="ODA Heater Present",
+        state_class=None,
+        icon="mdi:radiator",
+        value_fn=lambda data: safe_get(data, 'info', 'HeatRecovery', 'ProtectFrost', 'HeaterOdaPresent', 'Val'),
+        data_path=('info', 'HeatRecovery', 'ProtectFrost', 'HeaterOdaPresent'),
     ),
 
     # -- Diagnostics --
@@ -460,6 +646,24 @@ NODE_SENSOR_REGISTRY: dict[str, dict[str, NodeSensorMeta]] = {
             icon='mdi:access-point-network',
         ),
     },
+    'General': {
+        'UpTime': NodeSensorMeta(
+            name='Uptime',
+            native_unit_of_measurement='s',
+            device_class=SensorDeviceClass.DURATION,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+        ),
+        'BootCtr': NodeSensorMeta(
+            name='Boot Counter',
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            icon='mdi:restart',
+        ),
+        'WeekCtr': NodeSensorMeta(
+            name='Week Counter',
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            icon='mdi:calendar-week',
+        ),
+    },
 }
 
 
@@ -487,7 +691,15 @@ def discover_node_sensors(
     unknown keys get sensible defaults.
     """
     descriptions: list[DucoboxNodeSensorEntityDescription] = []
-    modules_to_scan = ('Sensor', 'Ventilation', 'NetworkDuco')
+    modules_to_scan = ('Sensor', 'Ventilation', 'NetworkDuco', 'General')
+
+    # General module keys that are metadata, not useful as sensor entities.
+    # Unknown General keys will still be auto-discovered.
+    _general_skip_keys = frozenset({
+        'Type', 'SubType', 'ProductId', 'NetworkType', 'Addr', 'SubAddr',
+        'Parent', 'Asso', 'SwVersion', 'SerialBoard', 'SerialDuco',
+        'Name', 'Identify', 'LinkMode',
+    })
 
     for module in modules_to_scan:
         module_data = node.get(module)
@@ -499,6 +711,10 @@ def discover_node_sensors(
         for key, value in module_data.items():
             # Only consider keys whose value is a dict with 'Val'
             if not isinstance(value, dict) or 'Val' not in value:
+                continue
+
+            # Skip General module keys that are device metadata, not sensors
+            if module == 'General' and key in _general_skip_keys:
                 continue
 
             meta = registry.get(key)

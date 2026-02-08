@@ -142,6 +142,17 @@ _ha_number = types.ModuleType("homeassistant.components.number")
 _ha_number.NumberEntity = type("NumberEntity", (), {})
 _ha_number.NumberMode = type("NumberMode", (), {"AUTO": "auto", "BOX": "box", "SLIDER": "slider"})
 
+# --- homeassistant.components.button ---
+@dataclass(frozen=True, kw_only=True)
+class _ButtonEntityDescription:
+    key: str
+    name: str | None = None
+    icon: str | None = None
+
+_ha_button = types.ModuleType("homeassistant.components.button")
+_ha_button.ButtonEntity = type("ButtonEntity", (), {})
+_ha_button.ButtonEntityDescription = _ButtonEntityDescription
+
 # --- homeassistant.components.select ---
 _ha_select = types.ModuleType("homeassistant.components.select")
 _ha_select.SelectEntity = type("SelectEntity", (), {})
@@ -159,6 +170,7 @@ _stubs = {
     "homeassistant.components": _ha_components,
     "homeassistant.components.sensor": _ha_sensor,
     "homeassistant.components.number": _ha_number,
+    "homeassistant.components.button": _ha_button,
     "homeassistant.components.select": _ha_select,
     "homeassistant.helpers": _ha_helpers,
     "homeassistant.helpers.update_coordinator": _ha_update_coord,
@@ -217,7 +229,7 @@ sys.modules["custom_components.ducobox_connectivity_board"] = _real_pkg
 # Also register sub-modules so "from custom_components.ducobox_connectivity_board.model …" works
 # Only register modules we actually need for testing (skip config_flow, number, select
 # which pull in extra deps like voluptuous, requests, etc.)
-for sub_name in ("const", "sensor"):
+for sub_name in ("const", "sensor", "button", "number", "select"):
     sub_mod = importlib.import_module(f"ducobox-connectivity-board.{sub_name}")
     sys.modules[f"custom_components.ducobox_connectivity_board.{sub_name}"] = sub_mod
 
@@ -263,6 +275,7 @@ def api_info_response() -> dict:
                 'HomeId': {'Val': '0x00FACADE'},
                 'State': {'Val': 'OPERATIONAL'},
             },
+            'PublicApi': {'WriteReqCntRemain': {'Val': 200}},
         },
         'Diag': {
             'Errors': [],
@@ -280,27 +293,45 @@ def api_info_response() -> dict:
                 'PressSupTgt': {'Val': 8},
                 'PressSup': {'Val': 89},
                 'PwmSup': {'Val': 18},
+                'PwmLvlSup': {'Val': 8000},
                 'SpeedEha': {'Val': 857},
                 'PressEha': {'Val': 167},
                 'PressEhaTgt': {'Val': 16},
                 'PwmEha': {'Val': 25},
+                'PwmLvlEha': {'Val': 10192},
+            },
+            'Calibration': {
+                'Valid': {'Val': True},
+                'State': {'Val': 'IDLE'},
+                'Status': {'Val': 'NOT_APPLICABLE'},
+                'Error': {'Val': 0},
             },
         },
         'HeatRecovery': {
             'General': {'TimeFilterRemain': {'Val': 145}},
             'Bypass': {'Pos': {'Val': 0}, 'TempSupTgt': {'Val': 238}},
-            'ProtectFrost': {'State': {'Val': 0}, 'PressReduct': {'Val': 0}},
+            'ProtectFrost': {'State': {'Val': 0}, 'PressReduct': {'Val': 0}, 'HeaterOdaPresent': {'Val': False}},
         },
         'NightBoost': {
             'General': {
+                'TempOutsideAvgThs': {'Val': 120},
                 'TempOutsideAvg': {'Val': 82},
+                'TempOutside': {'Val': 96},
+                'TempComfort': {'Val': 203},
+                'TempZone1': {'Val': 186},
                 'FlowLvlReqZone1': {'Val': 0},
             },
         },
         'VentCool': {
             'General': {
                 'State': {'Val': 0},
+                'TempOutsideAvgThs': {'Val': 120},
+                'TempOutsideAvg': {'Val': 82},
                 'TempInside': {'Val': 191},
+                'TempInsideMin': {'Val': 204},
+                'TempInsideMax': {'Val': 244},
+                'TempComfort': {'Val': 220},
+                'TempOutside': {'Val': 96},
             },
         },
     }
@@ -475,17 +506,114 @@ def api_config_nodes_response() -> dict:
 
 
 @pytest.fixture
-def coordinator_data(api_info_response, api_nodes_response, api_config_nodes_response) -> dict:
+def api_config_response() -> dict:
+    """Full /config response (anonymized)."""
+    return {
+        'General': {
+            'Time': {'TimeZone': {'Val': 1, 'Min': -11, 'Inc': 1, 'Max': 12}},
+            'Setup': {
+                'Complete': {'Val': 1, 'Min': 1, 'Inc': 1, 'Max': 1},
+                'Country': {'Val': 1, 'Min': 1, 'Inc': 1, 'Max': 1},
+            },
+            'Modbus': {'Addr': {'Val': 1, 'Min': 1, 'Inc': 1, 'Max': 254}},
+            'Lan': {
+                'TimeDucoClientIp': {'Val': 600, 'Min': 0, 'Inc': 1, 'Max': 3600},
+                'Mode': {'Val': 1, 'Min': 0, 'Inc': 1, 'Max': 4},
+                'Dhcp': {'Val': 1, 'Min': 0, 'Inc': 1, 'Max': 1},
+            },
+            'NodeData': {'UpdateRate': {'Val': 60, 'Min': 5, 'Inc': 1, 'Max': 3600}},
+            'AutoRebootComm': {'Period': {'Val': 7, 'Min': 0, 'Inc': 1, 'Max': 365}},
+            'PublicApi': {'DailyWriteReqCnt': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 10000}},
+        },
+        'Ventilation': {
+            'Ctrl': {
+                'TempDepThsLow': {'Val': 160, 'Min': 100, 'Inc': 1, 'Max': 240},
+                'TempDepThsHigh': {'Val': 240, 'Min': 160, 'Inc': 1, 'Max': 350},
+            },
+            'Calibration': {
+                'PressSupCfgZone1': {'Val': 85, 'Min': 0, 'Inc': 1, 'Max': 999},
+            },
+        },
+        'HeatRecovery': {
+            'Bypass': {'TimeFilter': {'Val': 180, 'Min': 90, 'Inc': 90, 'Max': 360}},
+        },
+        'NightBoost': {
+            'General': {
+                'TempStart': {'Val': 24, 'Min': 0, 'Inc': 1, 'Max': 60},
+                'FlowLvlReqMax': {'Val': 100, 'Min': 10, 'Inc': 5, 'Max': 100},
+            },
+        },
+        'VentCool': {
+            'General': {
+                'TimeStart': {'Val': 1320, 'Min': 0, 'Inc': 1, 'Max': 1439},
+                'SpeedWindMax': {'Val': 110, 'Min': 0, 'Inc': 1, 'Max': 200},
+            },
+        },
+        'Firmware': {
+            'General': {'DowngradeAllow': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1}},
+        },
+        'Azure': {
+            'Connection': {'Enable': {'Val': 1, 'Min': 0, 'Inc': 1, 'Max': 1}},
+        },
+    }
+
+
+@pytest.fixture
+def api_action_response() -> dict:
+    """Full /action response (anonymized)."""
+    return {
+        'Actions': [
+            {'Action': 'ResetFilterTimeRemain', 'ValType': 'None'},
+            {'Action': 'UpdateNodeData', 'ValType': 'None'},
+            {'Action': 'ReconnectWifi', 'ValType': 'None'},
+            {'Action': 'ScanWifi', 'ValType': 'None'},
+            {'Action': 'RebootBox', 'ValType': 'None'},
+        ]
+    }
+
+
+@pytest.fixture
+def api_action_nodes_response() -> dict:
+    """Full /action/nodes response (anonymized)."""
+    return {
+        'Nodes': [
+            {
+                'Node': 1,
+                'Actions': [
+                    {
+                        'Action': 'SetVentilationState',
+                        'Enum': ['AUTO', 'MAN1', 'MAN2', 'MAN3'],
+                    },
+                ],
+            },
+            {
+                'Node': 3,
+                'Actions': [
+                    {
+                        'Action': 'SetVentilationState',
+                        'Enum': ['AUTO', 'MAN1', 'MAN2', 'MAN3'],
+                    },
+                ],
+            },
+        ]
+    }
+
+
+@pytest.fixture
+def coordinator_data(api_info_response, api_nodes_response, api_config_nodes_response,
+                     api_config_response, api_action_response, api_action_nodes_response) -> dict:
     """Combined data dict as the coordinator would produce."""
     data = {
         'info': api_info_response,
         'nodes': api_nodes_response,
         'config_nodes': api_config_nodes_response,
+        'config': api_config_response,
+        'action': api_action_response,
         'mappings': {
             'node_id_to_name': {},
             'node_id_to_type': {},
         },
-        'action_nodes': {'Nodes': []},
+        'action_nodes': api_action_nodes_response,
     }
     for node in api_nodes_response:
         nid = node['Node']

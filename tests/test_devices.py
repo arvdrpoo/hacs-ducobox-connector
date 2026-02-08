@@ -104,6 +104,7 @@ class TestNodeSensorRegistry:
         assert 'Sensor' in NODE_SENSOR_REGISTRY
         assert 'Ventilation' in NODE_SENSOR_REGISTRY
         assert 'NetworkDuco' in NODE_SENSOR_REGISTRY
+        assert 'General' in NODE_SENSOR_REGISTRY
 
     def test_sensor_keys(self):
         sensor_keys = set(NODE_SENSOR_REGISTRY['Sensor'].keys())
@@ -306,13 +307,14 @@ class TestDiscoverNodeSensors:
         assert 'Sensor_Other' not in keys
 
     def test_skips_unscanned_modules(self):
-        """Modules not in the scan list (e.g. 'General', 'Diag') are ignored."""
+        """Modules not in the scan list (e.g. 'Diag') are ignored."""
         node = {
             'Node': 1,
             'General': {'Type': {'Val': 'BOX'}},
             'Diag': {'Errors': []},
         }
         descriptions = discover_node_sensors(node)
+        # General module is scanned but Type is in the skip list, so no sensors
         assert len(descriptions) == 0
 
     def test_returns_list_of_correct_type(self, api_nodes_response):
@@ -349,7 +351,7 @@ class TestBoxSensorsValueFn:
 
     def test_sensor_count(self):
         """Sanity check: we have a reasonable number of box-level sensors."""
-        assert len(SENSORS) >= 20
+        assert len(SENSORS) >= 30
 
     def test_all_have_value_fn(self):
         for s in SENSORS:
@@ -453,3 +455,135 @@ class TestBoxSensorsValueFn:
         for s in SENSORS:
             result = s.value_fn(empty_data)
             assert result is None, f"Sensor {s.key} returned {result} for empty data"
+
+    # -- New sensors added in expansion --
+
+    def test_nightboost_temp_outside_avg_ths(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'NightBoostTempOutsideAvgThs')
+        assert s.value_fn(coordinator_data) == pytest.approx(12.0)
+
+    def test_nightboost_temp_outside(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'NightBoostTempOutside')
+        assert s.value_fn(coordinator_data) == pytest.approx(9.6)
+
+    def test_nightboost_temp_comfort(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'NightBoostTempComfort')
+        assert s.value_fn(coordinator_data) == pytest.approx(20.3)
+
+    def test_nightboost_temp_zone1(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'NightBoostTempZone1')
+        assert s.value_fn(coordinator_data) == pytest.approx(18.6)
+
+    def test_ventcool_temp_outside_avg_ths(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'VentCoolTempOutsideAvgThs')
+        assert s.value_fn(coordinator_data) == pytest.approx(12.0)
+
+    def test_ventcool_temp_outside_avg(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'VentCoolTempOutsideAvg')
+        assert s.value_fn(coordinator_data) == pytest.approx(8.2)
+
+    def test_ventcool_temp_inside_min(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'VentCoolTempInsideMin')
+        assert s.value_fn(coordinator_data) == pytest.approx(20.4)
+
+    def test_ventcool_temp_inside_max(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'VentCoolTempInsideMax')
+        assert s.value_fn(coordinator_data) == pytest.approx(24.4)
+
+    def test_ventcool_temp_comfort(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'VentCoolTempComfort')
+        assert s.value_fn(coordinator_data) == pytest.approx(22.0)
+
+    def test_ventcool_temp_outside(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'VentCoolTempOutside')
+        assert s.value_fn(coordinator_data) == pytest.approx(9.6)
+
+    def test_pwm_lvl_sup(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'PwmLvlSup')
+        assert s.value_fn(coordinator_data) == 8000
+
+    def test_pwm_lvl_eha(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'PwmLvlEha')
+        assert s.value_fn(coordinator_data) == 10192
+
+    def test_calibration_state(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'CalibrationState')
+        assert s.value_fn(coordinator_data) == 'IDLE'
+
+    def test_calibration_status(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'CalibrationStatus')
+        assert s.value_fn(coordinator_data) == 'NOT_APPLICABLE'
+
+    def test_lan_mode(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'LanMode')
+        assert s.value_fn(coordinator_data) == 'WIFI_CLIENT'
+
+    def test_lan_ip(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'LanIp')
+        assert s.value_fn(coordinator_data) == '192.168.0.100'
+
+    def test_network_duco_state(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'NetworkDucoState')
+        assert s.value_fn(coordinator_data) == 'OPERATIONAL'
+
+    def test_public_api_write_req(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'PublicApiWriteReqCntRemain')
+        assert s.value_fn(coordinator_data) == 200
+
+    def test_heater_oda_present(self, coordinator_data):
+        s = next(s for s in SENSORS if s.key == 'HeaterOdaPresent')
+        assert s.value_fn(coordinator_data) is False
+
+
+# ── General module in node discovery ──────────────────────────────────
+
+class TestGeneralModuleDiscovery:
+
+    def test_discovers_uptime_from_general(self):
+        node = {
+            'Node': 1,
+            'General': {
+                'Type': {'Val': 'BOX'},
+                'UpTime': {'Val': 10936},
+                'Name': {'Val': 'Test'},
+            },
+        }
+        descriptions = discover_node_sensors(node)
+        keys = {d.sensor_key for d in descriptions}
+        assert 'General_UpTime' in keys
+
+    def test_skips_type_in_general(self):
+        node = {
+            'Node': 1,
+            'General': {
+                'Type': {'Val': 'BOX'},
+            },
+        }
+        descriptions = discover_node_sensors(node)
+        keys = {d.sensor_key for d in descriptions}
+        assert 'General_Type' not in keys
+
+    def test_skips_name_in_general(self):
+        node = {
+            'Node': 1,
+            'General': {
+                'Type': {'Val': 'BOX'},
+                'Name': {'Val': 'test'},
+            },
+        }
+        descriptions = discover_node_sensors(node)
+        keys = {d.sensor_key for d in descriptions}
+        assert 'General_Name' not in keys
+
+    def test_uptime_has_duration_device_class(self):
+        node = {
+            'Node': 1,
+            'General': {
+                'Type': {'Val': 'BOX'},
+                'UpTime': {'Val': 500},
+            },
+        }
+        descriptions = discover_node_sensors(node)
+        uptime = next(d for d in descriptions if d.sensor_key == 'General_UpTime')
+        assert uptime.device_class is not None
+        assert uptime.device_class.value == 'duration'

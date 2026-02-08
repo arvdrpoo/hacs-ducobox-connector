@@ -6,7 +6,7 @@ from ducopy import DucoPy
 from .model.coordinator import DucoboxCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-_PLATFORMS = ['sensor', 'number', 'select']
+_PLATFORMS = ['sensor', 'number', 'select', 'button']
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:

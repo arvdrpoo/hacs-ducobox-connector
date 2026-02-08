@@ -118,6 +118,10 @@ class TestAsyncSetupEntry:
                     if isinstance(e, DucoboxSensorEntity)}
         assert 'NightBoostTempOutsideAvg' not in box_keys
         assert 'NightBoostFlowLvlReqZone1' not in box_keys
+        assert 'NightBoostTempOutsideAvgThs' not in box_keys
+        assert 'NightBoostTempOutside' not in box_keys
+        assert 'NightBoostTempComfort' not in box_keys
+        assert 'NightBoostTempZone1' not in box_keys
 
     @pytest.mark.asyncio
     async def test_returns_on_unknown_mac(self, mock_hass, mock_entry, mock_coordinator):

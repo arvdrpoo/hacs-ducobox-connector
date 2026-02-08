@@ -34,8 +34,12 @@ def mock_duco_client(api_info_response, api_nodes_response, api_config_nodes_res
             return {'Nodes': api_nodes_response}
         elif endpoint == '/config/nodes':
             return api_config_nodes_response
+        elif endpoint == '/config':
+            return {}
         elif endpoint == '/action/nodes':
             return {'Nodes': []}
+        elif endpoint == '/action':
+            return {'Actions': []}
         return {}
 
     client.raw_get = MagicMock(side_effect=_raw_get)
@@ -86,6 +90,7 @@ class TestFetchData:
         mock_duco_client.raw_get.assert_any_call('/info')
         mock_duco_client.raw_get.assert_any_call('/info/nodes')
         mock_duco_client.raw_get.assert_any_call('/config/nodes')
+        mock_duco_client.raw_get.assert_any_call('/config')
 
     def test_data_contains_expected_keys(self, coordinator):
         coordinator._static_data = coordinator._fetch_once_data()
@@ -94,8 +99,10 @@ class TestFetchData:
         assert 'info' in data
         assert 'nodes' in data
         assert 'config_nodes' in data
+        assert 'config' in data
         assert 'mappings' in data
         assert 'action_nodes' in data
+        assert 'action' in data
 
     def test_nodes_is_list(self, coordinator, api_nodes_response):
         coordinator._static_data = coordinator._fetch_once_data()
@@ -125,6 +132,7 @@ class TestFetchData:
             '/info': {},
             '/info/nodes': {},  # no 'Nodes' key
             '/config/nodes': {},
+            '/config': {},
         }[ep])
 
         data = coordinator._fetch_data()
@@ -273,3 +281,66 @@ class TestAsyncSetVentilationState:
 
         with pytest.raises(Exception, match="timeout"):
             await coordinator.async_set_ventilation_state(1, 'MAN1', 'SetVentilationState')
+
+
+# ── async_set_box_config ──────────────────────────────────────────────
+
+class TestAsyncSetBoxConfig:
+
+    @pytest.mark.asyncio
+    async def test_patches_config(self, coordinator, mock_duco_client, mock_hass):
+        await coordinator.async_set_box_config('HeatRecovery', 'Bypass', 'TimeFilter', 200)
+
+        mock_duco_client.raw_patch.assert_called_once()
+        call_args = mock_duco_client.raw_patch.call_args
+        assert call_args[0][0] == '/config'
+        import json
+        body = json.loads(call_args[0][1])
+        assert body['HeatRecovery']['Bypass']['TimeFilter']['Val'] == 200
+
+    @pytest.mark.asyncio
+    async def test_raises_on_failure(self, coordinator, mock_duco_client, mock_hass):
+        mock_duco_client.raw_patch.side_effect = Exception("connection refused")
+
+        with pytest.raises(Exception, match="connection refused"):
+            await coordinator.async_set_box_config('M', 'S', 'K', 1)
+
+
+# ── async_execute_action ─────────────────────────────────────────────
+
+class TestAsyncExecuteAction:
+
+    @pytest.mark.asyncio
+    async def test_executes_action_no_value(self, coordinator, mock_duco_client, mock_hass):
+        await coordinator.async_execute_action('ResetFilterTimeRemain')
+
+        mock_duco_client.raw_patch.assert_called_once()
+        call_args = mock_duco_client.raw_patch.call_args
+        assert call_args[0][0] == '/action/ResetFilterTimeRemain'
+        assert call_args[0][1] is None
+
+    @pytest.mark.asyncio
+    async def test_executes_action_with_value(self, coordinator, mock_duco_client, mock_hass):
+        await coordinator.async_execute_action('SetIdentify', True)
+
+        call_args = mock_duco_client.raw_patch.call_args
+        import json
+        body = json.loads(call_args[0][1])
+        assert body['Val'] is True
+
+    @pytest.mark.asyncio
+    async def test_raises_on_failure(self, coordinator, mock_duco_client, mock_hass):
+        mock_duco_client.raw_patch.side_effect = Exception("timeout")
+
+        with pytest.raises(Exception, match="timeout"):
+            await coordinator.async_execute_action('Fail')
+
+
+# ── _fetch_once_data fetches /action ─────────────────────────────────
+
+class TestFetchOnceDataAction:
+
+    def test_fetches_box_actions(self, coordinator, mock_duco_client):
+        result = coordinator._fetch_once_data()
+        mock_duco_client.raw_get.assert_any_call('/action')
+        assert 'action' in result
