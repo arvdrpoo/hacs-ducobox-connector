@@ -9,7 +9,7 @@ from homeassistant.components.sensor import SensorEntity
 from .const import DOMAIN
 
 from .model.utils import safe_get
-from .model.devices import SENSORS, NODE_SENSORS
+from .model.devices import SENSORS, discover_node_sensors
 from .model.coordinator import DucoboxCoordinator, DucoboxSensorEntity, DucoboxNodeSensorEntity
 
 
@@ -64,32 +64,32 @@ async def async_setup_entry(
             )
         )
 
-    # Add node sensors if data is available
-    nodes = safe_get(coordinator.data, 'nodes')
+    # Add node sensors — auto-discovered from the actual API data
+    nodes = safe_get(coordinator.data, 'nodes') or []
     for node in nodes:
         node_id = node.get('Node')
         node_type = safe_get(node, 'General', 'Type', 'Val') or 'Unknown'
-        node_addr = safe_get(node, 'General', 'Addr') or 'Unknown'
         node_name = f"{device_id}:{node_id}:{node_type}"
 
         # Create device info for the node
         node_device_id = f"{device_id}-{node_id}"
+
+        sw_version = safe_get(node, 'General', 'SwVersion', 'Val')
+        serial = safe_get(node, 'General', 'SerialDuco', 'Val')
+
         node_device_info = DeviceInfo(
             identifiers={(DOMAIN, node_device_id)},
             name=node_name,
             manufacturer="Ducobox",
             model=node_type,
+            sw_version=sw_version if sw_version and sw_version != 'n/a' else None,
+            serial_number=serial if serial and serial != 'n/a' else None,
             via_device=(DOMAIN, device_id),
         )
 
-        # Get the sensors for this node type (only if data exists)
-        node_sensors = NODE_SENSORS.get(node_type, [])
-        for description in node_sensors:
-            # Check if sensor data exists in this node
-            if description.data_path is not None:
-                if safe_get(node, *description.data_path) is None:
-                    continue  # Skip sensor if data path doesn't exist
-
+        # Auto-discover sensors from the node's actual data
+        node_descriptions = discover_node_sensors(node)
+        for description in node_descriptions:
             unique_id = f"{node_device_id}-{description.key}"
             entities.append(
                 DucoboxNodeSensorEntity(

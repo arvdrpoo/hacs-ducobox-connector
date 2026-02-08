@@ -9,7 +9,7 @@ else
     DC=docker-compose --env-file devcontainers/local.env -f devcontainers/docker-compose.yml
 endif
 
-.PHONY: build start stop restart logs clean open-browser ensure-paths
+.PHONY: build start stop restart logs clean open-browser ensure-paths test
 
 # Ensure necessary directories exist
 ensure-paths:
@@ -54,3 +54,7 @@ rebuild: clean build start
 # Open Home Assistant in a browser
 open-browser:
 	xdg-open http://localhost:8123 || open http://localhost:8123 || start http://localhost:8123
+
+# Run the test suite
+test:
+	.venv/bin/python -m pytest tests/ -v

@@ -13,7 +13,6 @@ from ducopy.rest.models import ConfigNodeRequest
 import logging
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
-import time
 import json
 
 
@@ -51,6 +50,10 @@ class DucoboxCoordinator(DataUpdateCoordinator):
         data['action_nodes'] = node_actions
         _LOGGER.debug(f"Data received from /action/nodes = {node_actions}")
 
+        box_actions = self.duco_client.raw_get('/action')
+        data['action'] = box_actions
+        _LOGGER.debug(f"Data received from /action = {box_actions}")
+
         return data
 
     def _fetch_data(self) -> dict:
@@ -62,10 +65,10 @@ class DucoboxCoordinator(DataUpdateCoordinator):
             raise Exception("Duco client is not initialized")
 
         try:
-            data['info'] = duco_client.get_info()
-            _LOGGER.debug(f"Data received from /info: {data}")
+            # Use raw_get for all endpoints to get plain dicts
+            data['info'] = duco_client.raw_get('/info')
+            _LOGGER.debug(f"Data received from /info: {data['info']}")
 
-            # Use raw_get to bypass Pydantic validation which may be too strict
             nodes_response = duco_client.raw_get('/info/nodes')
             _LOGGER.debug(f"Data received from /info/nodes: {nodes_response}")
 
@@ -77,6 +80,10 @@ class DucoboxCoordinator(DataUpdateCoordinator):
             config_nodes = duco_client.raw_get('/config/nodes')
             data['config_nodes'] = config_nodes
             _LOGGER.debug(f"Data received from /config/nodes = {data['config_nodes']}")
+
+            box_config = duco_client.raw_get('/config')
+            data['config'] = box_config
+            _LOGGER.debug(f"Data received from /config = {data['config']}")
 
             data['mappings'] = {'node_id_to_name': {}, 'node_id_to_type': {}}
             for node in data['nodes']:
@@ -94,15 +101,12 @@ class DucoboxCoordinator(DataUpdateCoordinator):
             raise e
 
     async def async_set_value(self, node_id, key, value):
-        """Send an update to the device."""
+        """Send an update to a node config parameter."""
         try:
             data = json.dumps({
                 key: {'Val': int(round(value, 0))},
             }, separators=(',', ':'))
 
-            logging.error(str(data))
-            logging.error(f'/config/nodes/{node_id}')
-            # Use the DucoPy client to update the configuration
             await self.hass.async_add_executor_job(
                 self.duco_client.raw_patch, f'/config/nodes/{node_id}', data
             )
@@ -110,6 +114,39 @@ class DucoboxCoordinator(DataUpdateCoordinator):
             _LOGGER.info(f"Successfully set value for node {node_id}, key {key} to {value}")
         except Exception as e:
             _LOGGER.error(f"Failed to set value for node {node_id}, key {key}: {e}")
+            raise
+
+    async def async_set_box_config(self, module, submodule, key, value):
+        """Send an update to a box-level config parameter."""
+        try:
+            data = json.dumps({
+                module: {submodule: {key: {'Val': value}}},
+            }, separators=(',', ':'))
+
+            await self.hass.async_add_executor_job(
+                self.duco_client.raw_patch, '/config', data
+            )
+
+            _LOGGER.info(f"Successfully set box config {module}.{submodule}.{key} to {value}")
+        except Exception as e:
+            _LOGGER.error(f"Failed to set box config {module}.{submodule}.{key}: {e}")
+            raise
+
+    async def async_execute_action(self, action, value=None):
+        """Execute a box-level action."""
+        try:
+            if value is not None:
+                data = json.dumps({'Val': value}, separators=(',', ':'))
+            else:
+                data = None
+
+            await self.hass.async_add_executor_job(
+                self.duco_client.raw_patch, f'/action/{action}', data
+            )
+
+            _LOGGER.info(f"Successfully executed action {action}")
+        except Exception as e:
+            _LOGGER.error(f"Failed to execute action {action}: {e}")
             raise
 
     async def async_set_ventilation_state(self, node_id, option, action):
