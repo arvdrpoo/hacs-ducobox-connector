@@ -1,3 +1,11 @@
+"""Sensor definitions and auto-discovery for Ducobox devices.
+
+This module uses a registry-based approach: known sensor keys have explicit
+metadata (unit, device class, processing function). Unknown keys found in the
+API response are auto-discovered with sensible defaults so that new node types
+and sensor keys work out of the box.
+"""
+
 from .utils import (
     process_node_temperature,
     process_node_humidity,
@@ -16,6 +24,7 @@ from .utils import (
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import logging
 from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorDeviceClass,
@@ -31,12 +40,19 @@ from homeassistant.const import (
 )
 
 
+_LOGGER = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Dataclasses
+# ---------------------------------------------------------------------------
+
 @dataclass(frozen=True, kw_only=True)
 class DucoboxSensorEntityDescription(SensorEntityDescription):
-    """Describes a Ducobox sensor entity."""
+    """Describes a Ducobox (box-level) sensor entity."""
 
     value_fn: Callable[[dict], float | None]
-    data_path: tuple[str, ...] | None = None  # Path to check for sensor existence
+    data_path: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -45,14 +61,20 @@ class DucoboxNodeSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[dict], float | None]
     sensor_key: str
-    node_type: str
-    data_path: tuple[str, ...] | None = None  # Path to check for sensor existence in node data
+    data_path: tuple[str, ...] | None = None
 
+
+# ---------------------------------------------------------------------------
+# Box-level sensors  (/info)
+#
+# These are checked for existence via data_path so only sensors actually
+# present in the API response are registered.
+# ---------------------------------------------------------------------------
 
 SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
-    # Temperature sensors
-    # relevant ducobox documentation: https://www.duco.eu/Wes/CDN/1/Attachments/installation-guide-DucoBox-Energy-Comfort-(Plus)-(en)_638635518879333838.pdf
-    # Oda = outdoor -> box
+    # -- Ventilation / Sensor temperatures --
+    # Documentation: https://www.duco.eu/Wes/CDN/1/Attachments/installation-guide-DucoBox-Energy-Comfort-(Plus)-(en)_638635518879333838.pdf
+    # Oda = outdoor air → box
     DucoboxSensorEntityDescription(
         key="TempOda",
         name="Outdoor Temperature",
@@ -64,7 +86,7 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'Ventilation', 'Sensor', 'TempOda'),
     ),
-    # Sup = box -> house
+    # Sup = box → house (supply)
     DucoboxSensorEntityDescription(
         key="TempSup",
         name="Supply Temperature",
@@ -76,7 +98,7 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'Ventilation', 'Sensor', 'TempSup'),
     ),
-    # Eta = house -> box
+    # Eta = house → box (extract)
     DucoboxSensorEntityDescription(
         key="TempEta",
         name="Extract Temperature",
@@ -88,7 +110,7 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'Ventilation', 'Sensor', 'TempEta'),
     ),
-    # Eha = box -> outdoor
+    # Eha = box → outdoor (exhaust)
     DucoboxSensorEntityDescription(
         key="TempEha",
         name="Exhaust Temperature",
@@ -100,7 +122,8 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'Ventilation', 'Sensor', 'TempEha'),
     ),
-    # Fan speed sensors
+
+    # -- Fan speeds --
     DucoboxSensorEntityDescription(
         key="SpeedSup",
         name="Supply Fan Speed",
@@ -121,7 +144,8 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'Ventilation', 'Fan', 'SpeedEha'),
     ),
-    # Pressure sensors
+
+    # -- Fan pressures --
     DucoboxSensorEntityDescription(
         key="PressSup",
         name="Supply Pressure",
@@ -144,7 +168,50 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'Ventilation', 'Fan', 'PressEha'),
     ),
-    # Wi-Fi signal strength
+
+    # -- Fan PWM --
+    DucoboxSensorEntityDescription(
+        key="PwmSup",
+        name="Supply Fan PWM",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'Ventilation', 'Fan', 'PwmSup', 'Val'),
+        data_path=('info', 'Ventilation', 'Fan', 'PwmSup'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="PwmEha",
+        name="Exhaust Fan PWM",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'Ventilation', 'Fan', 'PwmEha', 'Val'),
+        data_path=('info', 'Ventilation', 'Fan', 'PwmEha'),
+    ),
+
+    # -- Pressure targets --
+    DucoboxSensorEntityDescription(
+        key="PressSupTgt",
+        name="Supply Pressure Target",
+        native_unit_of_measurement=UnitOfPressure.PA,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.PRESSURE,
+        value_fn=lambda data: process_pressure(
+            safe_get(data, 'info', 'Ventilation', 'Fan', 'PressSupTgt', 'Val')
+        ),
+        data_path=('info', 'Ventilation', 'Fan', 'PressSupTgt'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="PressEhaTgt",
+        name="Exhaust Pressure Target",
+        native_unit_of_measurement=UnitOfPressure.PA,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.PRESSURE,
+        value_fn=lambda data: process_pressure(
+            safe_get(data, 'info', 'Ventilation', 'Fan', 'PressEhaTgt', 'Val')
+        ),
+        data_path=('info', 'Ventilation', 'Fan', 'PressEhaTgt'),
+    ),
+
+    # -- Wi-Fi signal strength --
     DucoboxSensorEntityDescription(
         key="RssiWifi",
         name="Wi-Fi Signal Strength",
@@ -156,7 +223,8 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'General', 'Lan', 'RssiWifi'),
     ),
-    # Device uptime
+
+    # -- Device uptime --
     DucoboxSensorEntityDescription(
         key="UpTime",
         name="Device Uptime",
@@ -168,11 +236,12 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'General', 'Board', 'UpTime'),
     ),
-    # Filter time remaining
+
+    # -- Heat recovery --
     DucoboxSensorEntityDescription(
         key="TimeFilterRemain",
         name="Filter Time Remaining",
-        native_unit_of_measurement=UnitOfTime.DAYS,  # Assuming the value is in days
+        native_unit_of_measurement=UnitOfTime.DAYS,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.DURATION,
         value_fn=lambda data: process_timefilterremain(
@@ -180,7 +249,6 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'HeatRecovery', 'General', 'TimeFilterRemain'),
     ),
-    # Bypass position
     DucoboxSensorEntityDescription(
         key="BypassPos",
         name="Bypass Position",
@@ -191,588 +259,317 @@ SENSORS: tuple[DucoboxSensorEntityDescription, ...] = (
         ),
         data_path=('info', 'HeatRecovery', 'Bypass', 'Pos'),
     ),
-    # Add additional sensors here if needed
+    DucoboxSensorEntityDescription(
+        key="BypassTempSupTgt",
+        name="Bypass Supply Temperature Target",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'HeatRecovery', 'Bypass', 'TempSupTgt', 'Val')
+        ),
+        data_path=('info', 'HeatRecovery', 'Bypass', 'TempSupTgt'),
+    ),
+
+    # -- Frost protection --
+    DucoboxSensorEntityDescription(
+        key="FrostProtectState",
+        name="Frost Protection State",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'HeatRecovery', 'ProtectFrost', 'State', 'Val'),
+        data_path=('info', 'HeatRecovery', 'ProtectFrost', 'State'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="FrostProtectPressReduct",
+        name="Frost Protection Pressure Reduction",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'HeatRecovery', 'ProtectFrost', 'PressReduct', 'Val'),
+        data_path=('info', 'HeatRecovery', 'ProtectFrost', 'PressReduct'),
+    ),
+
+    # -- NightBoost --
+    DucoboxSensorEntityDescription(
+        key="NightBoostTempOutsideAvg",
+        name="NightBoost Outside Temperature Average",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'NightBoost', 'General', 'TempOutsideAvg', 'Val')
+        ),
+        data_path=('info', 'NightBoost', 'General', 'TempOutsideAvg'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="NightBoostFlowLvlReqZone1",
+        name="NightBoost Flow Level Request Zone 1",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'NightBoost', 'General', 'FlowLvlReqZone1', 'Val'),
+        data_path=('info', 'NightBoost', 'General', 'FlowLvlReqZone1'),
+    ),
+
+    # -- VentCool --
+    DucoboxSensorEntityDescription(
+        key="VentCoolState",
+        name="Ventilation Cooling State",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: safe_get(data, 'info', 'VentCool', 'General', 'State', 'Val'),
+        data_path=('info', 'VentCool', 'General', 'State'),
+    ),
+    DucoboxSensorEntityDescription(
+        key="VentCoolTempInside",
+        name="Ventilation Cooling Inside Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        value_fn=lambda data: process_temperature(
+            safe_get(data, 'info', 'VentCool', 'General', 'TempInside', 'Val')
+        ),
+        data_path=('info', 'VentCool', 'General', 'TempInside'),
+    ),
+
+    # -- Diagnostics --
+    DucoboxSensorEntityDescription(
+        key="DiagStatus",
+        name="Diagnostic Status",
+        value_fn=lambda data: (ss[0].get('Status') if (ss := safe_get(data, 'info', 'Diag', 'SubSystems')) and isinstance(ss, list) and len(ss) > 0 else None),
+        data_path=('info', 'Diag', 'SubSystems'),
+    ),
 )
 
-# Define sensors for nodes based on their type
-NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
-    'BOX': [
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
-            name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='BOX',
-            data_path=('Ventilation', 'Mode'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='State',
-            name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='BOX',
-            data_path=('Ventilation', 'State'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='FlowLvlTgt',
-            name='Flow Level Target',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'FlowLvlTgt')),
-            sensor_key='FlowLvlTgt',
-            node_type='BOX',
-            data_path=('Ventilation', 'FlowLvlTgt'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateRemain',
-            name='Time State Remaining',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateRemain')),
-            sensor_key='TimeStateRemain',
-            node_type='BOX',
-            data_path=('Ventilation', 'TimeStateRemain'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateEnd',
-            name='Time State End',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateEnd')),
-            sensor_key='TimeStateEnd',
-            node_type='BOX',
-            data_path=('Ventilation', 'TimeStateEnd'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Temp',
+
+# ---------------------------------------------------------------------------
+# Node-level sensor auto-discovery
+#
+# Instead of hard-coding sensors per node type (BOX, UCCO2, BSRH, …),
+# we define a *registry* of known sensor keys with their metadata.
+# At setup time, sensor.py iterates the actual node data and creates
+# entities for every key found, looking up metadata from this registry.
+# Unknown keys get sensible defaults — no code changes needed for new
+# node types or new sensor keys.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class NodeSensorMeta:
+    """Metadata for a known node sensor key."""
+
+    name: str
+    native_unit_of_measurement: str | None = None
+    device_class: SensorDeviceClass | None = None
+    state_class: SensorStateClass | None = SensorStateClass.MEASUREMENT
+    process_fn: Callable[[float | None], float | None] | None = None
+    icon: str | None = None
+
+
+# Registry: module → key → metadata
+# The module corresponds to the top-level key in the node dict
+# (e.g. "Sensor", "Ventilation", "NetworkDuco").
+NODE_SENSOR_REGISTRY: dict[str, dict[str, NodeSensorMeta]] = {
+    'Sensor': {
+        'Temp': NodeSensorMeta(
             name='Temperature',
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
-            value_fn=lambda node: process_node_temperature(
-                extract_val(safe_get(node, 'Sensor', 'Temp'))
-            ),
-            sensor_key='Temp',
-            node_type='BOX',
-            data_path=('Sensor', 'Temp'),
+            process_fn=process_node_temperature,
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='Rh',
+        'Rh': NodeSensorMeta(
             name='Relative Humidity',
             native_unit_of_measurement=PERCENTAGE,
             device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_humidity(
-                extract_val(safe_get(node, 'Sensor', 'Rh'))
-            ),
-            sensor_key='Rh',
-            node_type='BOX',
-            data_path=('Sensor', 'Rh'),
+            process_fn=process_node_humidity,
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqRh',
+        'IaqRh': NodeSensorMeta(
             name='Humidity Air Quality',
             native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
-            ),
-            sensor_key='IaqRh',
-            node_type='BOX',
-            data_path=('Sensor', 'IaqRh'),
+            process_fn=process_node_iaq,
+            icon='mdi:air-filter',
         ),
-    ],
-    'UCCO2': [
-        DucoboxNodeSensorEntityDescription(
-            key='Temp',
-            name='Temperature',
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            value_fn=lambda node: process_node_temperature(
-                extract_val(safe_get(node, 'Sensor', 'Temp'))
-            ),
-            sensor_key='Temp',
-            node_type='UCCO2',
-            data_path=('Sensor', 'Temp'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Co2',
+        'Co2': NodeSensorMeta(
             name='CO₂',
             native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
             device_class=SensorDeviceClass.CO2,
-            value_fn=lambda node: process_node_co2(
-                extract_val(safe_get(node, 'Sensor', 'Co2'))
-            ),
-            sensor_key='Co2',
-            node_type='UCCO2',
-            data_path=('Sensor', 'Co2'),
+            process_fn=process_node_co2,
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqCo2',
+        'IaqCo2': NodeSensorMeta(
             name='CO₂ Air Quality',
             native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqCo2'))
-            ),
-            sensor_key='IaqCo2',
-            node_type='UCCO2',
-            data_path=('Sensor', 'IaqCo2'),
+            process_fn=process_node_iaq,
+            icon='mdi:air-filter',
         ),
-    ],
-    'BSRH': [
-        DucoboxNodeSensorEntityDescription(
-            key='Temp',
-            name='Temperature',
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            value_fn=lambda node: process_node_temperature(
-                extract_val(safe_get(node, 'Sensor', 'Temp'))
-            ),
-            sensor_key='Temp',
-            node_type='BSRH',
-            data_path=('Sensor', 'Temp'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Rh',
-            name='Relative Humidity',
-            native_unit_of_measurement=PERCENTAGE,
-            device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_humidity(
-                extract_val(safe_get(node, 'Sensor', 'Rh'))
-            ),
-            sensor_key='Rh',
-            node_type='BSRH',
-            data_path=('Sensor', 'Rh'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqRh',
-            name='Humidity Air Quality',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
-            ),
-            sensor_key='IaqRh',
-            node_type='BSRH',
-            data_path=('Sensor', 'IaqRh'),
-        ),
-    ],
-    'VLVRH': [
-        DucoboxNodeSensorEntityDescription(
-            key='State',
+    },
+    'Ventilation': {
+        'State': NodeSensorMeta(
             name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='VLVRH',
-            data_path=('Ventilation', 'State'),
+            state_class=None,
+            icon='mdi:hvac',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateRemain',
-            name='Time State Remaining',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateRemain')),
-            sensor_key='TimeStateRemain',
-            node_type='VLVRH',
-            data_path=('Ventilation', 'TimeStateRemain'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateEnd',
-            name='Time State End',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateEnd')),
-            sensor_key='TimeStateEnd',
-            node_type='VLVRH',
-            data_path=('Ventilation', 'TimeStateEnd'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
+        'Mode': NodeSensorMeta(
             name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='VLVRH',
-            data_path=('Ventilation', 'Mode'),
+            state_class=None,
+            icon='mdi:hvac',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='FlowLvlTgt',
+        'FlowLvlTgt': NodeSensorMeta(
             name='Flow Level Target',
             native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'FlowLvlTgt')),
-            sensor_key='FlowLvlTgt',
-            node_type='VLVRH',
-            data_path=('Ventilation', 'FlowLvlTgt'),
+            icon='mdi:fan',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqRh',
-            name='Humidity Air Quality',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
-            ),
-            sensor_key='IaqRh',
-            node_type='VLVRH',
-            data_path=('Sensor', 'IaqRh'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Rh',
-            name='Relative Humidity',
-            native_unit_of_measurement=PERCENTAGE,
-            device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_humidity(
-                extract_val(safe_get(node, 'Sensor', 'Rh'))
-            ),
-            sensor_key='Rh',
-            node_type='VLVRH',
-            data_path=('Sensor', 'Rh'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Temp',
-            name='Temperature',
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            value_fn=lambda node: process_node_temperature(
-                extract_val(safe_get(node, 'Sensor', 'Temp'))
-            ),
-            sensor_key='Temp',
-            node_type='VLVRH',
-            data_path=('Sensor', 'Temp'),
-        ),
-    ],
-    'VLVCO2': [
-        DucoboxNodeSensorEntityDescription(
-            key='State',
-            name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='VLVCO2',
-            data_path=('Ventilation', 'State'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateRemain',
+        'TimeStateRemain': NodeSensorMeta(
             name='Time State Remaining',
             native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateRemain')),
-            sensor_key='TimeStateRemain',
-            node_type='VLVCO2',
-            data_path=('Ventilation', 'TimeStateRemain'),
+            icon='mdi:timer-outline',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateEnd',
+        'TimeStateEnd': NodeSensorMeta(
             name='Time State End',
             native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateEnd')),
-            sensor_key='TimeStateEnd',
-            node_type='VLVCO2',
-            data_path=('Ventilation', 'TimeStateEnd'),
+            icon='mdi:timer-outline',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
-            name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='VLVCO2',
-            data_path=('Ventilation', 'Mode'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='FlowLvlTgt',
-            name='Flow Level Target',
+        'Pos': NodeSensorMeta(
+            name='Valve Position',
             native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'FlowLvlTgt')),
-            sensor_key='FlowLvlTgt',
-            node_type='VLVCO2',
-            data_path=('Ventilation', 'FlowLvlTgt'),
+            icon='mdi:valve',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='Co2',
-            name='CO₂',
-            native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
-            device_class=SensorDeviceClass.CO2,
-            value_fn=lambda node: process_node_co2(
-                extract_val(safe_get(node, 'Sensor', 'Co2'))
-            ),
-            sensor_key='Co2',
-            node_type='VLVCO2',
-            data_path=('Sensor', 'Co2'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqCo2',
-            name='CO₂ Air Quality',
+        'FlowLvlOvrl': NodeSensorMeta(
+            name='Flow Level Override',
             native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqCo2'))
-            ),
-            sensor_key='IaqCo2',
-            node_type='VLVCO2',
-            data_path=('Sensor', 'IaqCo2'),
+            icon='mdi:fan',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='Temp',
-            name='Temperature',
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            value_fn=lambda node: process_node_temperature(
-                extract_val(safe_get(node, 'Sensor', 'Temp'))
-            ),
-            sensor_key='Temp',
-            node_type='VLVCO2',
-            data_path=('Sensor', 'Temp'),
-        ),
-    ],
-    'VLVCO2RH': [
-        DucoboxNodeSensorEntityDescription(
-            key='State',
-            name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='VLVCO2RH',
-            data_path=('Ventilation', 'State'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateRemain',
-            name='Time State Remaining',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateRemain')),
-            sensor_key='TimeStateRemain',
-            node_type='VLVCO2RH',
-            data_path=('Ventilation', 'TimeStateRemain'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateEnd',
-            name='Time State End',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateEnd')),
-            sensor_key='TimeStateEnd',
-            node_type='VLVCO2RH',
-            data_path=('Ventilation', 'TimeStateEnd'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
-            name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='VLVCO2RH',
-            data_path=('Ventilation', 'Mode'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='FlowLvlTgt',
-            name='Flow Level Target',
+        'FlowLvlReqSensor': NodeSensorMeta(
+            name='Flow Level Sensor Request',
             native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'FlowLvlTgt')),
-            sensor_key='FlowLvlTgt',
-            node_type='VLVCO2RH',
-            data_path=('Ventilation', 'FlowLvlTgt'),
+            icon='mdi:fan',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='Co2',
-            name='CO₂',
-            native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
-            device_class=SensorDeviceClass.CO2,
-            value_fn=lambda node: process_node_co2(
-                extract_val(safe_get(node, 'Sensor', 'Co2'))
-            ),
-            sensor_key='Co2',
-            node_type='VLVCO2RH',
-            data_path=('Sensor', 'Co2'),
+    },
+    'NetworkDuco': {
+        'CommErrorCtr': NodeSensorMeta(
+            name='Communication Error Counter',
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            icon='mdi:alert-circle-outline',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqCo2',
-            name='CO₂ Air Quality',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqCo2'))
-            ),
-            sensor_key='IaqCo2',
-            node_type='VLVCO2RH',
-            data_path=('Sensor', 'IaqCo2'),
+        'RssiRfN2M': NodeSensorMeta(
+            name='RF Signal Strength (Node to Master)',
+            native_unit_of_measurement='dBm',
+            device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='Rh',
-            name='Relative Humidity',
-            native_unit_of_measurement=PERCENTAGE,
-            device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_humidity(
-                extract_val(safe_get(node, 'Sensor', 'Rh'))
-            ),
-            sensor_key='Rh',
-            node_type='VLVCO2RH',
-            data_path=('Sensor', 'Rh'),
+        'RssiRfN2H': NodeSensorMeta(
+            name='RF Signal Strength (Node to Hub)',
+            native_unit_of_measurement='dBm',
+            device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqRh',
-            name='Humidity Air Quality',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
-            ),
-            sensor_key='IaqRh',
-            node_type='VLVCO2RH',
-            data_path=('Sensor', 'IaqRh'),
+        'HopRf': NodeSensorMeta(
+            name='RF Hop Count',
+            icon='mdi:access-point-network',
         ),
-        DucoboxNodeSensorEntityDescription(
-            key='Temp',
-            name='Temperature',
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            value_fn=lambda node: process_node_temperature(
-                extract_val(safe_get(node, 'Sensor', 'Temp'))
-            ),
-            sensor_key='Temp',
-            node_type='VLVCO2RH',
-            data_path=('Sensor', 'Temp'),
-        ),
-    ],
-    'VLV': [
-        DucoboxNodeSensorEntityDescription(
-            key='State',
-            name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='VLV',
-            data_path=('Ventilation', 'State'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
-            name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='VLV',
-            data_path=('Ventilation', 'Mode'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='FlowLvlTgt',
-            name='Flow Level Target',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'FlowLvlTgt')),
-            sensor_key='FlowLvlTgt',
-            node_type='VLV',
-            data_path=('Ventilation', 'FlowLvlTgt'),
-        ),
-    ],
-    'SWITCH': [
-        DucoboxNodeSensorEntityDescription(
-            key='State',
-            name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='SWITCH',
-            data_path=('Ventilation', 'State'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
-            name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='SWITCH',
-            data_path=('Ventilation', 'Mode'),
-        ),
-    ],
-    'UCBAT': [
-        DucoboxNodeSensorEntityDescription(
-            key='State',
-            name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='UCBAT',
-            data_path=('Ventilation', 'State'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateRemain',
-            name='Time State Remaining',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateRemain')),
-            sensor_key='TimeStateRemain',
-            node_type='UCBAT',
-            data_path=('Ventilation', 'TimeStateRemain'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateEnd',
-            name='Time State End',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateEnd')),
-            sensor_key='TimeStateEnd',
-            node_type='UCBAT',
-            data_path=('Ventilation', 'TimeStateEnd'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
-            name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='UCBAT',
-            data_path=('Ventilation', 'Mode'),
-        ),
-    ],
-    'UCRH': [
-        DucoboxNodeSensorEntityDescription(
-            key='State',
-            name='Ventilation State',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'State')),
-            sensor_key='State',
-            node_type='UCRH',
-            data_path=('Ventilation', 'State'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateRemain',
-            name='Time State Remaining',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateRemain')),
-            sensor_key='TimeStateRemain',
-            node_type='UCRH',
-            data_path=('Ventilation', 'TimeStateRemain'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='TimeStateEnd',
-            name='Time State End',
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'TimeStateEnd')),
-            sensor_key='TimeStateEnd',
-            node_type='UCRH',
-            data_path=('Ventilation', 'TimeStateEnd'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Mode',
-            name='Ventilation Mode',
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'Mode')),
-            sensor_key='Mode',
-            node_type='UCRH',
-            data_path=('Ventilation', 'Mode'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='FlowLvlTgt',
-            name='Flow Level Target',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: extract_val(safe_get(node, 'Ventilation', 'FlowLvlTgt')),
-            sensor_key='FlowLvlTgt',
-            node_type='UCRH',
-            data_path=('Ventilation', 'FlowLvlTgt'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='IaqRh',
-            name='Humidity Air Quality',
-            native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: process_node_iaq(
-                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
-            ),
-            sensor_key='IaqRh',
-            node_type='UCRH',
-            data_path=('Sensor', 'IaqRh'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Rh',
-            name='Relative Humidity',
-            native_unit_of_measurement=PERCENTAGE,
-            device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_humidity(
-                extract_val(safe_get(node, 'Sensor', 'Rh'))
-            ),
-            sensor_key='Rh',
-            node_type='UCRH',
-            data_path=('Sensor', 'Rh'),
-        ),
-        DucoboxNodeSensorEntityDescription(
-            key='Temp',
-            name='Temperature',
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            value_fn=lambda node: process_node_temperature(
-                extract_val(safe_get(node, 'Sensor', 'Temp'))
-            ),
-            sensor_key='Temp',
-            node_type='UCRH',
-            data_path=('Sensor', 'Temp'),
-        ),
-    ],
-    # Add other node types and their sensors if needed
+    },
 }
+
+
+def _humanize_key(key: str) -> str:
+    """Convert a CamelCase key to a human-readable name.
+
+    E.g. 'FlowLvlTgt' -> 'Flow Lvl Tgt'
+    """
+    import re
+    # Insert space before uppercase letters that follow lowercase letters
+    name = re.sub(r'([a-z])([A-Z])', r'\1 \2', key)
+    # Insert space before uppercase letters followed by lowercase (handles acronyms)
+    name = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1 \2', name)
+    return name
+
+
+def discover_node_sensors(
+    node: dict,
+) -> list[DucoboxNodeSensorEntityDescription]:
+    """Auto-discover sensors from a node's data dict.
+
+    Iterates modules (Sensor, Ventilation, NetworkDuco) and creates
+    entity descriptions for every key that has a {'Val': ...} value.
+    Known keys get rich metadata from NODE_SENSOR_REGISTRY;
+    unknown keys get sensible defaults.
+    """
+    descriptions: list[DucoboxNodeSensorEntityDescription] = []
+    modules_to_scan = ('Sensor', 'Ventilation', 'NetworkDuco')
+
+    for module in modules_to_scan:
+        module_data = node.get(module)
+        if not isinstance(module_data, dict):
+            continue
+
+        registry = NODE_SENSOR_REGISTRY.get(module, {})
+
+        for key, value in module_data.items():
+            # Only consider keys whose value is a dict with 'Val'
+            if not isinstance(value, dict) or 'Val' not in value:
+                continue
+
+            meta = registry.get(key)
+            sensor_key = f"{module}_{key}"
+
+            if meta is not None:
+                # Known sensor — use rich metadata
+                name = meta.name
+                unit = meta.native_unit_of_measurement
+                device_class = meta.device_class
+                state_class = meta.state_class
+                icon = meta.icon
+                process_fn = meta.process_fn
+
+                if process_fn is not None:
+                    value_fn = _make_value_fn_processed(module, key, process_fn)
+                else:
+                    value_fn = _make_value_fn_raw(module, key)
+            else:
+                # Unknown sensor — auto-discover with defaults
+                name = f"{module} {_humanize_key(key)}"
+                unit = None
+                device_class = None
+                state_class = SensorStateClass.MEASUREMENT
+                icon = None
+                value_fn = _make_value_fn_raw(module, key)
+
+                _LOGGER.info(
+                    "Auto-discovered unknown node sensor: module=%s key=%s "
+                    "in node %s (type=%s). Consider adding it to NODE_SENSOR_REGISTRY.",
+                    module, key,
+                    node.get('Node'),
+                    safe_get(node, 'General', 'Type', 'Val'),
+                )
+
+            kwargs = dict(
+                key=sensor_key,
+                name=name,
+                value_fn=value_fn,
+                sensor_key=sensor_key,
+                data_path=(module, key),
+            )
+            if unit is not None:
+                kwargs['native_unit_of_measurement'] = unit
+            if device_class is not None:
+                kwargs['device_class'] = device_class
+            if state_class is not None:
+                kwargs['state_class'] = state_class
+            if icon is not None:
+                kwargs['icon'] = icon
+
+            descriptions.append(DucoboxNodeSensorEntityDescription(**kwargs))
+
+    return descriptions
+
+
+def _make_value_fn_processed(
+    module: str, key: str, process_fn: Callable
+) -> Callable[[dict], float | None]:
+    """Create a value_fn that extracts Val and applies a processing function."""
+    def value_fn(node: dict) -> float | None:
+        raw = safe_get(node, module, key)
+        return process_fn(extract_val(raw))
+    return value_fn
+
+
+def _make_value_fn_raw(
+    module: str, key: str
+) -> Callable[[dict], float | None]:
+    """Create a value_fn that just extracts the Val."""
+    def value_fn(node: dict) -> float | None:
+        raw = safe_get(node, module, key)
+        return extract_val(raw)
+    return value_fn

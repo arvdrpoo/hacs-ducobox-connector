@@ -62,10 +62,10 @@ class DucoboxCoordinator(DataUpdateCoordinator):
             raise Exception("Duco client is not initialized")
 
         try:
-            data['info'] = duco_client.get_info()
-            _LOGGER.debug(f"Data received from /info: {data}")
+            # Use raw_get for all endpoints to get plain dicts
+            data['info'] = duco_client.raw_get('/info')
+            _LOGGER.debug(f"Data received from /info: {data['info']}")
 
-            # Use raw_get to bypass Pydantic validation which may be too strict
             nodes_response = duco_client.raw_get('/info/nodes')
             _LOGGER.debug(f"Data received from /info/nodes: {nodes_response}")
 
