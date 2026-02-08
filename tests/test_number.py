@@ -166,6 +166,33 @@ class TestNumberSetupEntry:
         assert any('SpeedWindMax' in uid for uid in box_ids)
         assert any('TempSupTgtZone1' in uid for uid in box_ids)
 
+    @pytest.mark.asyncio
+    async def test_skips_boolean_params(self, mock_hass, mock_entry, mock_coordinator):
+        """Boolean params (Min=0, Max=1) belong in switch platform, not number."""
+        hass, _ = mock_hass
+        added_entities = []
+
+        await async_setup_entry(hass, mock_entry, lambda e: added_entities.extend(e))
+
+        box_ids = {e._attr_unique_id for e in added_entities if isinstance(e, DucoboxBoxNumberEntity)}
+        assert not any('EnableMonday' in uid for uid in box_ids)
+        assert not any('TempDepEnable' in uid for uid in box_ids)
+        assert not any('Adaptive' in uid for uid in box_ids)
+        assert not any('NightBoost' in uid and 'Enable' in uid for uid in box_ids)
+
+    @pytest.mark.asyncio
+    async def test_skips_enum_select_params(self, mock_hass, mock_entry, mock_coordinator):
+        """Enum-like params in _CONFIG_SELECT_PARAMS belong in select platform."""
+        hass, _ = mock_hass
+        added_entities = []
+
+        await async_setup_entry(hass, mock_entry, lambda e: added_entities.extend(e))
+
+        box_ids = {e._attr_unique_id for e in added_entities if isinstance(e, DucoboxBoxNumberEntity)}
+        # Bypass.Mode and VentCool.General.Mode should be selects, not numbers
+        assert not any('Bypass-Mode' in uid for uid in box_ids)
+        assert not any('VentCool-General-Mode' in uid for uid in box_ids)
+
 
 class TestTemperatureScaling:
     """Temperature parameters stored in tenths should display as °C."""

@@ -25,6 +25,33 @@ import re
 _LOGGER = logging.getLogger(__name__)
 
 
+# ── Shared skip / classification sets (also used by switch.py) ──
+
+# Entire submodules to exclude from auto-discovery.
+_box_config_skip = frozenset({
+    ('General', 'Setup'),             # Complete, Language, Country — setup wizard params
+    ('General', 'Modbus'),            # Addr, Offset, DailyWriteReqCnt — bus config
+    ('General', 'AutoRebootComm'),    # Period, Time — auto-reboot scheduling
+    ('General', 'PublicApi'),         # DailyWriteReqCnt — internal counter
+    ('Firmware', 'General'),          # DowngradeAllow — dangerous
+    ('Azure', 'Connection'),          # Enable — cloud connectivity toggle
+})
+
+# Individual keys to skip (module, submodule, key).
+_box_config_skip_keys = frozenset({
+    ('General', 'Lan', 'Mode'),              # Network mode enum — not a tunable number
+    ('General', 'Lan', 'Dhcp'),              # Boolean flag — not a tunable number
+    ('General', 'Lan', 'TimeDucoClientIp'),  # Internal timing for Duco client
+})
+
+# Parameters stored in tenths of °C — display as °C with ÷10 scaling.
+_temp_tenth_keys = frozenset({
+    ('HeatRecovery', 'Bypass', 'TempSupTgtZone1'),
+    ('Ventilation', 'Ctrl', 'TempDepThsLow'),
+    ('Ventilation', 'Ctrl', 'TempDepThsHigh'),
+})
+
+
 def _is_number_param(value) -> bool:
     """Check if a value is a configurable number parameter ({Val, Min, Max, Inc})."""
     return (
@@ -78,30 +105,10 @@ async def async_setup_entry(
     #
     # Skip parameters that are:
     #  - Fixed (Min == Max): user can't change them, e.g. Setup.Complete
-    #  - Internal/dangerous: Modbus addresses, reboot schedules, firmware,
-    #    Azure, daily counters, etc.
-    _box_config_skip = frozenset({
-        ('General', 'Setup'),             # Complete, Language, Country — setup wizard params
-        ('General', 'Modbus'),            # Addr, Offset, DailyWriteReqCnt — bus config
-        ('General', 'AutoRebootComm'),    # Period, Time — auto-reboot scheduling
-        ('General', 'PublicApi'),         # DailyWriteReqCnt — internal counter
-        ('Firmware', 'General'),          # DowngradeAllow — dangerous
-        ('Azure', 'Connection'),          # Enable — cloud connectivity toggle
-    })
-
-    # Parameters stored in tenths of °C — display as °C with ÷10 scaling.
-    _temp_tenth_keys = frozenset({
-        ('HeatRecovery', 'Bypass', 'TempSupTgtZone1'),
-        ('Ventilation', 'Ctrl', 'TempDepThsLow'),
-        ('Ventilation', 'Ctrl', 'TempDepThsHigh'),
-    })
-
-    # Individual keys to skip (module, submodule, key)
-    _box_config_skip_keys = frozenset({
-        ('General', 'Lan', 'Mode'),              # Network mode enum — not a tunable number
-        ('General', 'Lan', 'Dhcp'),              # Boolean flag — not a tunable number
-        ('General', 'Lan', 'TimeDucoClientIp'),  # Internal timing for Duco client
-    })
+    #  - Boolean (Min=0, Max=1): handled by switch platform
+    #  - Enum-like: handled by select platform (_CONFIG_SELECT_PARAMS)
+    #  - Internal/dangerous: in _box_config_skip / _box_config_skip_keys
+    from .select import _CONFIG_SELECT_PARAMS
 
     box_config = coordinator.data.get('config', {})
     for module, module_data in box_config.items():
@@ -120,6 +127,12 @@ async def async_setup_entry(
                     continue
                 # Skip individually excluded keys
                 if (module, submodule, key) in _box_config_skip_keys:
+                    continue
+                # Skip boolean params (handled by switch platform)
+                if value['Min'] == 0 and value['Max'] == 1:
+                    continue
+                # Skip enum params (handled by select platform)
+                if (module, submodule, key) in _CONFIG_SELECT_PARAMS:
                     continue
                 is_temp_tenth = (module, submodule, key) in _temp_tenth_keys
                 scale = 10 if is_temp_tenth else 1

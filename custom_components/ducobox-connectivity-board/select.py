@@ -1,7 +1,9 @@
 """Select platform for Ducobox Connectivity Board.
 
 Exposes Enum-type node actions (e.g. SetVentilationState) as select
-entities, and reads the current state from the coordinator data.
+entities, and box-level config parameters that behave as enums
+(e.g. HeatRecovery.Bypass.Mode) as select entities with human-readable
+option labels.
 """
 
 from __future__ import annotations
@@ -15,8 +17,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .model.utils import safe_get
+from .number import _humanize_config_key
 
 import logging
+import re
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,6 +28,21 @@ _LOGGER = logging.getLogger(__name__)
 # Format: action_name → (module, key) to read from each node in /info/nodes.
 _ACTION_STATE_MAP = {
     'SetVentilationState': ('Ventilation', 'State'),
+}
+
+# ── Box-level config parameters that are selects ──
+# (module, submodule, key) → list of (api_value, label) pairs.
+_CONFIG_SELECT_PARAMS: dict[tuple[str, str, str], list[tuple[int, str]]] = {
+    ('HeatRecovery', 'Bypass', 'Mode'): [
+        (0, 'Auto'),
+        (1, 'Closed'),
+        (2, 'Open'),
+    ],
+    ('VentCool', 'General', 'Mode'): [
+        (0, 'Off'),
+        (1, 'Auto'),
+        (2, 'On'),
+    ],
 }
 
 
@@ -80,12 +99,50 @@ async def async_setup_entry(
                 )
             )
 
+    # ── Box-level config select entities ──
+    box_name = safe_get(coordinator.data, "info", "General", "Board", "BoxName", "Val") or "Unknown Model"
+    box_subtype = safe_get(coordinator.data, "info", "General", "Board", "BoxSubTypeName", "Val") or ""
+    box_model = f"{box_name} {box_subtype}".replace('_', ' ').strip()
+
+    box_device_info = DeviceInfo(
+        identifiers={(DOMAIN, device_id)},
+        name=device_id,
+        manufacturer="Ducobox",
+        model=box_model,
+        sw_version=safe_get(coordinator.data, "info", "General", "Board", "SwVersionBox", "Val") or "Unknown Version",
+    )
+
+    box_config = coordinator.data.get('config', {})
+    for (module, submodule, key), option_pairs in _CONFIG_SELECT_PARAMS.items():
+        value = safe_get(box_config, module, submodule, key)
+        if value is None:
+            continue
+        labels = [label for _, label in option_pairs]
+        val_to_label = {v: label for v, label in option_pairs}
+        label_to_val = {label: v for v, label in option_pairs}
+
+        readable_name = f"{module} {submodule} {_humanize_config_key(key)}"
+        unique_id = f"{device_id}-config-{module}-{submodule}-{key}"
+        entities.append(
+            DucoboxConfigSelectEntity(
+                coordinator=coordinator,
+                module=module,
+                submodule=submodule,
+                param_key=key,
+                device_info=box_device_info,
+                unique_id=unique_id,
+                name=readable_name,
+                options=labels,
+                val_to_label=val_to_label,
+                label_to_val=label_to_val,
+            )
+        )
+
     async_add_entities(entities)
 
 
 def _humanize_action(action: str) -> str:
     """Convert 'SetVentilationState' → 'Ventilation State'."""
-    import re
     name = action
     if name.startswith('Set'):
         name = name[3:]
@@ -136,4 +193,50 @@ class DucoboxActionSelectEntity(CoordinatorEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         await self.coordinator.async_set_ventilation_state(self._node_id, option, self._action)
+        await self.coordinator.async_request_refresh()
+
+
+class DucoboxConfigSelectEntity(CoordinatorEntity, SelectEntity):
+    """Representation of a box-level config parameter with a fixed set of options.
+
+    Maps integer API values (0, 1, 2 …) to human-readable labels.
+    """
+
+    def __init__(self, coordinator, module, submodule, param_key, device_info, unique_id, name, options, val_to_label, label_to_val):
+        super().__init__(coordinator)
+        self._module = module
+        self._submodule = submodule
+        self._param_key = param_key
+        self._device_info = device_info
+        self._val_to_label = val_to_label
+        self._label_to_val = label_to_val
+        self._attr_unique_id = unique_id
+        self._attr_name = f"{device_info['name']} {name}"
+        self._attr_options = options
+
+    @property
+    def device_info(self):
+        return self._device_info
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current selected option from coordinator data."""
+        raw = safe_get(
+            self.coordinator.data, 'config',
+            self._module, self._submodule, self._param_key, 'Val'
+        )
+        if raw is not None:
+            return self._val_to_label.get(raw)
+        return None
+
+    @property
+    def options(self) -> list[str]:
+        return self._attr_options
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the selected option, converting label back to API int."""
+        api_val = self._label_to_val[option]
+        await self.coordinator.async_set_box_config(
+            self._module, self._submodule, self._param_key, api_val
+        )
         await self.coordinator.async_request_refresh()

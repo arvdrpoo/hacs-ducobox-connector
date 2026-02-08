@@ -157,6 +157,10 @@ _ha_button.ButtonEntityDescription = _ButtonEntityDescription
 _ha_select = types.ModuleType("homeassistant.components.select")
 _ha_select.SelectEntity = type("SelectEntity", (), {})
 
+# --- homeassistant.components.switch ---
+_ha_switch = types.ModuleType("homeassistant.components.switch")
+_ha_switch.SwitchEntity = type("SwitchEntity", (), {})
+
 
 # ───────────────────────────────────────────────────────────────────────
 # 2.  Register stubs in sys.modules  (before any import of custom_components)
@@ -172,6 +176,7 @@ _stubs = {
     "homeassistant.components.number": _ha_number,
     "homeassistant.components.button": _ha_button,
     "homeassistant.components.select": _ha_select,
+    "homeassistant.components.switch": _ha_switch,
     "homeassistant.helpers": _ha_helpers,
     "homeassistant.helpers.update_coordinator": _ha_update_coord,
     "homeassistant.helpers.device_registry": _ha_device_registry,
@@ -510,7 +515,10 @@ def api_config_response() -> dict:
     """Full /config response (anonymized)."""
     return {
         'General': {
-            'Time': {'TimeZone': {'Val': 1, 'Min': -11, 'Inc': 1, 'Max': 12}},
+            'Time': {
+                'TimeZone': {'Val': 1, 'Min': -11, 'Inc': 1, 'Max': 12},
+                'Dst': {'Val': 1, 'Min': 0, 'Inc': 1, 'Max': 1},
+            },
             'Setup': {
                 'Complete': {'Val': 1, 'Min': 1, 'Inc': 1, 'Max': 1},
                 'Country': {'Val': 1, 'Min': 1, 'Inc': 1, 'Max': 1},
@@ -527,28 +535,53 @@ def api_config_response() -> dict:
         },
         'Ventilation': {
             'Ctrl': {
+                'TreeBalanceThs': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 100},
+                'TempDepEnable': {'Val': 1, 'Min': 0, 'Inc': 1, 'Max': 1},
                 'TempDepThsLow': {'Val': 160, 'Min': 100, 'Inc': 1, 'Max': 240},
                 'TempDepThsHigh': {'Val': 240, 'Min': 160, 'Inc': 1, 'Max': 350},
             },
             'Calibration': {
+                'GroundBound': {'Val': 1, 'Min': 0, 'Inc': 1, 'Max': 1},
                 'PressSupCfgZone1': {'Val': 85, 'Min': 0, 'Inc': 1, 'Max': 999},
+                'PressEhaCfg': {'Val': 174, 'Min': 0, 'Inc': 1, 'Max': 999},
+                'FlowEhaCfg': {'Val': 250, 'Min': 0, 'Inc': 5, 'Max': 325},
             },
         },
         'HeatRecovery': {
             'Bypass': {
+                'Mode': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 2},
+                'Adaptive': {'Val': 1, 'Min': 0, 'Inc': 1, 'Max': 1},
                 'TempSupTgtZone1': {'Val': 210, 'Min': 100, 'Inc': 1, 'Max': 255},
                 'TimeFilter': {'Val': 180, 'Min': 90, 'Inc': 90, 'Max': 360},
+            },
+            'ProtectFrost': {
+                'PassiveHouse': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
+                'HeaterOdaExtPresent': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
             },
         },
         'NightBoost': {
             'General': {
+                'Enable': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
                 'TempStart': {'Val': 24, 'Min': 0, 'Inc': 1, 'Max': 60},
+                'MonthStart': {'Val': 1, 'Min': 1, 'Inc': 1, 'Max': 12},
+                'MonthStop': {'Val': 12, 'Min': 1, 'Inc': 1, 'Max': 12},
+                'TimeStart': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1439},
+                'TimeStop': {'Val': 1439, 'Min': 0, 'Inc': 1, 'Max': 1439},
                 'FlowLvlReqMax': {'Val': 100, 'Min': 10, 'Inc': 5, 'Max': 100},
             },
         },
         'VentCool': {
             'General': {
+                'Mode': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 2},
+                'EnableMonday': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
+                'EnableTuesday': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
+                'EnableWednesday': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
+                'EnableThursday': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
+                'EnableFriday': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
+                'EnableSaturday': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
+                'EnableSunday': {'Val': 0, 'Min': 0, 'Inc': 1, 'Max': 1},
                 'TimeStart': {'Val': 1320, 'Min': 0, 'Inc': 1, 'Max': 1439},
+                'TimeStop': {'Val': 360, 'Min': 0, 'Inc': 1, 'Max': 1439},
                 'SpeedWindMax': {'Val': 110, 'Min': 0, 'Inc': 1, 'Max': 200},
             },
         },

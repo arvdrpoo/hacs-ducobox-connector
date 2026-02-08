@@ -10,7 +10,7 @@ from .model.coordinator import DucoboxCoordinator
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _LOGGER = logging.getLogger(__name__)
-_PLATFORMS = ['sensor', 'number', 'select', 'button']
+_PLATFORMS = ['sensor', 'number', 'select', 'switch', 'button']
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
