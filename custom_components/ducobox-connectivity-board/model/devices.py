@@ -246,11 +246,11 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             value_fn=lambda node: process_node_temperature(
-                safe_get(node, 'Sensor', 'data', 'Temp')
+                extract_val(safe_get(node, 'Sensor', 'Temp'))
             ),
             sensor_key='Temp',
             node_type='BOX',
-            data_path=('Sensor', 'data', 'Temp'),
+            data_path=('Sensor', 'Temp'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Rh',
@@ -258,22 +258,22 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=PERCENTAGE,
             device_class=SensorDeviceClass.HUMIDITY,
             value_fn=lambda node: process_node_humidity(
-                safe_get(node, 'Sensor', 'data', 'Rh')
+                extract_val(safe_get(node, 'Sensor', 'Rh'))
             ),
             sensor_key='Rh',
             node_type='BOX',
-            data_path=('Sensor', 'data', 'Rh'),
+            data_path=('Sensor', 'Rh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='IaqRh',
             name='Humidity Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqRh')
+                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
             ),
             sensor_key='IaqRh',
             node_type='BOX',
-            data_path=('Sensor', 'data', 'IaqRh'),
+            data_path=('Sensor', 'IaqRh'),
         ),
     ],
     'UCCO2': [
@@ -283,11 +283,11 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             value_fn=lambda node: process_node_temperature(
-                safe_get(node, 'Sensor', 'data', 'Temp')
+                extract_val(safe_get(node, 'Sensor', 'Temp'))
             ),
             sensor_key='Temp',
             node_type='UCCO2',
-            data_path=('Sensor', 'data', 'Temp'),
+            data_path=('Sensor', 'Temp'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Co2',
@@ -295,22 +295,22 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
             device_class=SensorDeviceClass.CO2,
             value_fn=lambda node: process_node_co2(
-                safe_get(node, 'Sensor', 'data', 'Co2')
+                extract_val(safe_get(node, 'Sensor', 'Co2'))
             ),
             sensor_key='Co2',
             node_type='UCCO2',
-            data_path=('Sensor', 'data', 'Co2'),
+            data_path=('Sensor', 'Co2'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='IaqCo2',
             name='CO₂ Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqCo2')
+                extract_val(safe_get(node, 'Sensor', 'IaqCo2'))
             ),
             sensor_key='IaqCo2',
             node_type='UCCO2',
-            data_path=('Sensor', 'data', 'IaqCo2'),
+            data_path=('Sensor', 'IaqCo2'),
         ),
     ],
     'BSRH': [
@@ -320,11 +320,11 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             value_fn=lambda node: process_node_temperature(
-                safe_get(node, 'Sensor', 'data', 'Temp')
+                extract_val(safe_get(node, 'Sensor', 'Temp'))
             ),
             sensor_key='Temp',
             node_type='BSRH',
-            data_path=('Sensor', 'data', 'Temp'),
+            data_path=('Sensor', 'Temp'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Rh',
@@ -332,22 +332,22 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=PERCENTAGE,
             device_class=SensorDeviceClass.HUMIDITY,
             value_fn=lambda node: process_node_humidity(
-                safe_get(node, 'Sensor', 'data', 'Rh')
+                extract_val(safe_get(node, 'Sensor', 'Rh'))
             ),
             sensor_key='Rh',
             node_type='BSRH',
-            data_path=('Sensor', 'data', 'Rh'),
+            data_path=('Sensor', 'Rh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='IaqRh',
             name='Humidity Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqRh')
+                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
             ),
             sensor_key='IaqRh',
             node_type='BSRH',
-            data_path=('Sensor', 'data', 'IaqRh'),
+            data_path=('Sensor', 'IaqRh'),
         ),
     ],
     'VLVRH': [
@@ -399,23 +399,23 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             name='Humidity Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqRh')
+                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
             ),
             sensor_key='IaqRh',
             node_type='VLVRH',
-            data_path=('Sensor', 'data', 'IaqRh'),
+            data_path=('Sensor', 'IaqRh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Rh',
             name='Relative Humidity',
             native_unit_of_measurement=PERCENTAGE,
             device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'Rh')
+            value_fn=lambda node: process_node_humidity(
+                extract_val(safe_get(node, 'Sensor', 'Rh'))
             ),
             sensor_key='Rh',
             node_type='VLVRH',
-            data_path=('Sensor', 'data', 'Rh'),
+            data_path=('Sensor', 'Rh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Temp',
@@ -423,11 +423,11 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             value_fn=lambda node: process_node_temperature(
-                safe_get(node, 'Sensor', 'data', 'Temp')
+                extract_val(safe_get(node, 'Sensor', 'Temp'))
             ),
             sensor_key='Temp',
             node_type='VLVRH',
-            data_path=('Sensor', 'data', 'Temp'),
+            data_path=('Sensor', 'Temp'),
         ),
     ],
     'VLVCO2': [
@@ -480,22 +480,22 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
             device_class=SensorDeviceClass.CO2,
             value_fn=lambda node: process_node_co2(
-                safe_get(node, 'Sensor', 'data', 'Co2')
+                extract_val(safe_get(node, 'Sensor', 'Co2'))
             ),
             sensor_key='Co2',
             node_type='VLVCO2',
-            data_path=('Sensor', 'data', 'Co2'),
+            data_path=('Sensor', 'Co2'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='IaqCo2',
             name='CO₂ Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqCo2')
+                extract_val(safe_get(node, 'Sensor', 'IaqCo2'))
             ),
             sensor_key='IaqCo2',
             node_type='VLVCO2',
-            data_path=('Sensor', 'data', 'IaqCo2'),
+            data_path=('Sensor', 'IaqCo2'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Temp',
@@ -503,11 +503,11 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             value_fn=lambda node: process_node_temperature(
-                safe_get(node, 'Sensor', 'data', 'Temp')
+                extract_val(safe_get(node, 'Sensor', 'Temp'))
             ),
             sensor_key='Temp',
             node_type='VLVCO2',
-            data_path=('Sensor', 'data', 'Temp'),
+            data_path=('Sensor', 'Temp'),
         ),
     ],
     'VLVCO2RH': [
@@ -560,45 +560,45 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
             device_class=SensorDeviceClass.CO2,
             value_fn=lambda node: process_node_co2(
-                safe_get(node, 'Sensor', 'data', 'Co2')
+                extract_val(safe_get(node, 'Sensor', 'Co2'))
             ),
             sensor_key='Co2',
             node_type='VLVCO2RH',
-            data_path=('Sensor', 'data', 'Co2'),
+            data_path=('Sensor', 'Co2'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='IaqCo2',
             name='CO₂ Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqCo2')
+                extract_val(safe_get(node, 'Sensor', 'IaqCo2'))
             ),
             sensor_key='IaqCo2',
             node_type='VLVCO2RH',
-            data_path=('Sensor', 'data', 'IaqCo2'),
+            data_path=('Sensor', 'IaqCo2'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Rh',
             name='Relative Humidity',
             native_unit_of_measurement=PERCENTAGE,
             device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'Rh')
+            value_fn=lambda node: process_node_humidity(
+                extract_val(safe_get(node, 'Sensor', 'Rh'))
             ),
             sensor_key='Rh',
             node_type='VLVCO2RH',
-            data_path=('Sensor', 'data', 'Rh'),
+            data_path=('Sensor', 'Rh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='IaqRh',
             name='Humidity Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqRh')
+                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
             ),
             sensor_key='IaqRh',
             node_type='VLVCO2RH',
-            data_path=('Sensor', 'data', 'IaqRh'),
+            data_path=('Sensor', 'IaqRh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Temp',
@@ -606,11 +606,11 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             value_fn=lambda node: process_node_temperature(
-                safe_get(node, 'Sensor', 'data', 'Temp')
+                extract_val(safe_get(node, 'Sensor', 'Temp'))
             ),
             sensor_key='Temp',
             node_type='VLVCO2RH',
-            data_path=('Sensor', 'data', 'Temp'),
+            data_path=('Sensor', 'Temp'),
         ),
     ],
     'VLV': [
@@ -743,23 +743,23 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             name='Humidity Air Quality',
             native_unit_of_measurement=PERCENTAGE,
             value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'IaqRh')
+                extract_val(safe_get(node, 'Sensor', 'IaqRh'))
             ),
             sensor_key='IaqRh',
             node_type='UCRH',
-            data_path=('Sensor', 'data', 'IaqRh'),
+            data_path=('Sensor', 'IaqRh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Rh',
             name='Relative Humidity',
             native_unit_of_measurement=PERCENTAGE,
             device_class=SensorDeviceClass.HUMIDITY,
-            value_fn=lambda node: process_node_iaq(
-                safe_get(node, 'Sensor', 'data', 'Rh')
+            value_fn=lambda node: process_node_humidity(
+                extract_val(safe_get(node, 'Sensor', 'Rh'))
             ),
             sensor_key='Rh',
             node_type='UCRH',
-            data_path=('Sensor', 'data', 'Rh'),
+            data_path=('Sensor', 'Rh'),
         ),
         DucoboxNodeSensorEntityDescription(
             key='Temp',
@@ -767,11 +767,11 @@ NODE_SENSORS: dict[str, list[DucoboxNodeSensorEntityDescription]] = {
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             value_fn=lambda node: process_node_temperature(
-                safe_get(node, 'Sensor', 'data', 'Temp')
+                extract_val(safe_get(node, 'Sensor', 'Temp'))
             ),
             sensor_key='Temp',
             node_type='UCRH',
-            data_path=('Sensor', 'data', 'Temp'),
+            data_path=('Sensor', 'Temp'),
         ),
     ],
     # Add other node types and their sensors if needed
